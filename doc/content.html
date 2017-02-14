@@ -1,0 +1,155 @@
+<h2>Wstęp</h2>
+
+<p>Słowa kluczowe async i await oraz klasa Task niezaprzeczalnie potrafią niezwykle ułatwić życie programistom C# (w VB.Net ich nie używałem ale podbno też som). Zabawki te są jednak bardzo młode, a .Net jest stary. Programiści pisali kod asynchroniczny tak jak (nie)potrafili i tak jak im środowisko (nie)pozwalało. Microsoft sam zmagał się z tym problemem i stworzył TaskCompletionSource, pozwalającą przerobić cokolwiek na Task&#39;a.</p>
+
+<h2>I promise I will call back</h2>
+
+<p>Dla niewtajemniczonych: piękne polskie słowo kolbak, kt&oacute;re brzmi znacznie lepiej niż &quot;wywołanie zwrotne&quot;, opisuje rozwiązanie, w kt&oacute;rym metoda jako jeden z argument&oacute;w przyjmuje metodę, kt&oacute;ra ma zostać wywołana gdy kod się wykona.</p>
+
+<p><code>public void GetNextInt(Action&lt;int&gt; callback)<br />
+{<br />
+&nbsp;&nbsp; &nbsp;/* Magic in here */<br />
+&nbsp;&nbsp; &nbsp;callback(123);<br />
+}</code></p>
+
+<p>Kolbak może też zawierać informację o niepowodzeniu zadania (a nawet powinien). Osobiście spotkałem się z rozwiązaniem w kt&oacute;rym metoda przekazywana jako kolbak przyjmuje wyjątek albo kod błędu.</p>
+
+<p><code>public void GetNextInt(Action&lt;int, Exception&gt; callback)<br />
+{<br />
+&nbsp;&nbsp; &nbsp;try<br />
+&nbsp;&nbsp; &nbsp;{<br />
+&nbsp;&nbsp; &nbsp; &nbsp; &nbsp;/*Magic in here*/<br />
+&nbsp;&nbsp; &nbsp; &nbsp; &nbsp;callback(123, null);<br />
+&nbsp;&nbsp; &nbsp;}<br />
+&nbsp;&nbsp; &nbsp;catch(Exception ex)<br />
+&nbsp; &nbsp; {<br />
+&nbsp;&nbsp; &nbsp; &nbsp; &nbsp;callback(default(int), ex);<br />
+&nbsp;&nbsp; &nbsp;}<br />
+}</code></p>
+
+<p>Na kolbaki można się też natknąć w czasie integracji z innymi technologiami bo wspierają je wszyscy: C++, Javascript, Phyton, PHP, Java ... przepraszam Java jednak nie :-D.<br />
+Adaptacja takiej metody do czegoś co zwr&oacute;ci Task z wykorzystaniem TaskCompletionSource jest łatwa.</p>
+
+<p><code>public Task GetNextInt()<br />
+{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;var completionSource = new TaskCompletionSource();<br />
+<br />
+&nbsp;&nbsp;&nbsp;&nbsp;GetNextInt((result, exception) =&gt;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (exception != null)<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.SetException(exception);<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.SetResult(result);<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br />
+&nbsp;&nbsp;&nbsp;&nbsp;});<br />
+<br />
+&nbsp;&nbsp;&nbsp;&nbsp;return completionSource.Task;<br />
+}</code></p>
+
+<p>Teraz drobne ostrzeżenie. Zdarza się że callback jest wywoływany kilka razy. TaskCompletionSource nie lubi tego i wywołanie SetException albo SetResult spowoduje wyjątek. W takim przypadku należy upomnieć tw&oacute;rcę kodu, że robi źle, jeżeli to nie pomaga należy użyć środk&oacute;w przymusu bezpośredniego, jak to nie skutkuje należy upewnić się że napisał taki kod ostatni raz. Jeżeli jednak i to jest niemożliwe, ponieważ ktoś już go zdążył zastrzelić należy spr&oacute;bować zorientować kt&oacute;ry CompletionHandler jest tym właściwym, albo założyć że pierwsze wywołanie jest dobre wystarczająco i użyć metod TrySetResult i TrySetException.</p>
+
+<p>W tym miejscu chciałbym zaproponować użycie następującego helpera</p>
+
+<p><code>public Task Invoke&lt;T&gt;(Action&lt;T&gt; methodToInvoke)<br />
+{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;var completionSource = new TaskCompletionSource&lt;T&gt;();<br />
+&nbsp;&nbsp;&nbsp;&nbsp;methodToInvoke((result, exception) =&gt;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (exception != null)<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.SetException(exception);<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.SetResult(result);<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br />
+&nbsp;&nbsp;&nbsp;&nbsp;});<br />
+}</code></p>
+
+<p>Użycie tego helpera opakowanie kolbaka do taska do:</p>
+
+<p><code>public Task GetNextInt()<br />
+{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;return Invoke(GetNextInt);<br />
+}</code></p>
+
+<p>a w przypadku gdy metoda przyjmuje argumenty:</p>
+
+<p><code>public Task GetNextInt(string argument)<br />
+{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;return Invoke((handler) =&gt; GetNextInt(argument, handler));<br />
+}</code></p>
+
+<p>Ten helper sprawdzi się jeżeli API używa typu Action jako callbacku, adaptacja API, kt&oacute;re używa innego typu też nie powinna być trudna (sprowadza się do zmiany typu przyjmowanego jako argument helpera). Problem pojawia się gdy API używa r&oacute;żnych typ&oacute;w dla kolbak&oacute;w. Niestety Csharp ma ograniczenie i nie potrafi &quot;w locie&quot; przetłumaczyć typ&oacute;w oznaczanych słowem delegate nawet jeżeli mają takie same wejścia i wyjścia (np. nie da się przekazać Action&lt;object, EventArgs&gt; jako EventHandlera). W tym przypadku pozostaje pisać wszystko z palca, napisać generator kodu, albo pr&oacute;bować ugryźć to refleksją.</p>
+
+<h3>Promise</h3>
+
+<p>Mechanizm spopularyzowany w javascript przez jQuery, w .Net nie zdążył się spopularyzować ale można spotkać chałupnicze jego implementacje. Ponieważ kawałek kodu wyraża więcej niż 1000 sł&oacute;w jeżeli w kodzie istnieje kawałek kodu wyglądający tak:</p>
+
+<p><code>GetNextInt()<br />
+&nbsp;&nbsp;&nbsp;&nbsp;.OnDone(result =&gt; {<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* Wyświetl wynik */<br />
+&nbsp; &nbsp; &nbsp; &nbsp; MessageBox.Show(&quot;Wynik to &quot; + result);<br />
+&nbsp;&nbsp;&nbsp;&nbsp;}).OnError(error =&gt; {<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.ShowError(&quot;Coś poszło nie tak.&quot;)<br />
+&nbsp;&nbsp;&nbsp;&nbsp;}).Always(() =&gt; {<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* Schowaj kręcioła */<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;HideSpinner();<br />
+&nbsp;&nbsp;&nbsp;&nbsp;});</code></p>
+
+<p>to na 99% GetNextInt zwraca Promise&lt;T&gt; albo IPromise&lt;T&gt;. Adaptacja Promise do Task jest trywialna:</p>
+
+<p><code>public Taks&lt;T&gt; Wrap(this IPromise&lt;T&gt; promise)<br />
+{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;var taskCompletionSource = new TaskCompletionSource&lt;T&gt;();<br />
+&nbsp;&nbsp;&nbsp;&nbsp;promise<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.OnDone(result =&gt; {<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;taskCompletionSource.SetResult(result)<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}).OnError(error =&gt; {<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;taskCompletionSource.SetException(error);<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;});<br />
+&nbsp;&nbsp;&nbsp;&nbsp;return taskCompletionSource.Task;<br />
+}</code></p>
+
+<p>albo nawet trywialniejsza:</p>
+
+<p><code>public Taks&lt;T&gt; Wrap&lt;T&gt;(this IPromise&lt;T&gt; promise)<br />
+{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;var taskCompletionSource = new TaskCompletionSource&lt;T&gt;();<br />
+&nbsp;&nbsp;&nbsp;&nbsp;promise<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.OnDone(taskCompletionSource.SetResult)<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.OnError(taskCompletionSource.SetException);<br />
+&nbsp;&nbsp;&nbsp;&nbsp;return taskCompletionSource.Task;<br />
+}</code></p>
+
+<h2>Asynchroniczność przez zdarzenia</h2>
+
+<p>Jedną z pr&oacute;b ogarnięcia asynchroniczności było wykorzystanie mechanizmu zdarzeń (event). Onegdaj istniały takie technologie jak WCF - służący do wystawiania na świat&nbsp;API po http oraz Silverlight, kt&oacute;ry miał robić to co dzisiaj <s>Flash</s> javascript. I jak się tworzyło połączenia między SL a WCF to powstawały klasy pasujące do szablonu:</p>
+
+<p><code>public class Proxy<br />
+{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;void Method1(int argument);<br />
+&nbsp;&nbsp;&nbsp;&nbsp;event EventHandler&lt;EventArgs&lt;Result1&gt;&gt; Method1Completed;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;event EventHandler&lt;FailureEventArgs&gt; Method1Failed;<br />
+<br />
+&nbsp;&nbsp;&nbsp;&nbsp;void Method2();<br />
+&nbsp;&nbsp;&nbsp;&nbsp;event EventHandler&lt;EventArgs&lt;Result2&gt;&gt; Method1Completed;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;event EventHandler&lt;FailureEventArgs&gt; Method1Failed;<br />
+}</code></p>
+
+<p>Ale poczułem się staro. Podobny wzorzec był stosowany też w innych technologiach. Ma on wiele wad w por&oacute;wnaniu do kolbak&oacute;w. Na początek nie istnieje żadna gwarancja że jeżeli wywołam Method1 z argumentem 1 po czym wywołam Method1 z argumentem 2 to event Method1Completed dla 1 przyjdzie przez tym samym eventem dla 2. Na potrzeby dalszych rozważań uznam, że opakowanie w Task i użycie sł&oacute;w async i await sprawi że wywołanie z 2 nie nastąpi przez eventem dla 1, co nie musi być prawdą ale zazwyczaj jest.</p>
+
+<h3>Implementacja naiwna</h3>
+
+<p>&nbsp;</p>
+
+<h2>Ale obiecałeś ... i umarłeś</h2>
+
+<p>&nbsp;</p>
+
+<h2>Kody źr&oacute;dłowe</h2>
+
+<p>Kod źr&oacute;dłowy stworzony na potrzeby tego postu udostępniam na <a href="https://github.com/szogun1987/events-and-tasks">githubie</a></p>
