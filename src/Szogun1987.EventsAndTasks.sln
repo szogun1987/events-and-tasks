@@ -5,7 +5,7 @@ VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Szogun1987.EventsAndTasks", "Szogun1987.EventsAndTasks\Szogun1987.EventsAndTasks.csproj", "{FFB6B640-0CF8-4D4A-9354-D9D3C55ED77A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Szogun1987.EventsAndTasks.Tests", "..\Szogun1987.EventsAndTasks.Tests\Szogun1987.EventsAndTasks.Tests.csproj", "{EFD405A1-638D-4F56-BBBB-E1B3714E33BA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Szogun1987.EventsAndTasks.Tests", "Szogun1987.EventsAndTasks.Tests\Szogun1987.EventsAndTasks.Tests.csproj", "{EFD405A1-638D-4F56-BBBB-E1B3714E33BA}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
