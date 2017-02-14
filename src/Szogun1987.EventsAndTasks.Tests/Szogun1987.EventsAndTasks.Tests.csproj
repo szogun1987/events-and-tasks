@@ -43,7 +43,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Szogun1987.EventsAndTasks\Szogun1987.EventsAndTasks\Szogun1987.EventsAndTasks.csproj">
+    <ProjectReference Include="..\Szogun1987.EventsAndTasks\Szogun1987.EventsAndTasks.csproj">
       <Project>{ffb6b640-0cf8-4d4a-9354-d9d3c55ed77a}</Project>
       <Name>Szogun1987.EventsAndTasks</Name>
     </ProjectReference>
