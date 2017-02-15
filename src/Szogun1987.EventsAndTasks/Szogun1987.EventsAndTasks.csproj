@@ -40,12 +40,14 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Callbacks\CallbacksApi.cs" />
+    <Compile Include="Callbacks\CallbacksHelper.cs" />
+    <Compile Include="Callbacks\CallbacksTaskAdapter.cs" />
     <Compile Include="ITaskAdapter.cs" />
-    <Compile Include="ITrigger.cs" />
+    <Compile Include="ICompletionTrigger.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="Callbacks\" />
     <Folder Include="Events\" />
     <Folder Include="Promises\" />
   </ItemGroup>
