@@ -45,11 +45,15 @@
     <Compile Include="Callbacks\CallbacksTaskAdapter.cs" />
     <Compile Include="ITaskAdapter.cs" />
     <Compile Include="ICompletionTrigger.cs" />
+    <Compile Include="Promises\IPromise.cs" />
+    <Compile Include="Promises\PromisesAdapter.cs" />
+    <Compile Include="Promises\PromisesApi.cs" />
+    <Compile Include="Promises\PromisesExtensions.cs" />
+    <Compile Include="Promises\SamplePromise.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Events\" />
-    <Folder Include="Promises\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
