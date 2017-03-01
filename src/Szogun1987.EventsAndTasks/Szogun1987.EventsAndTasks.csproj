@@ -43,6 +43,11 @@
     <Compile Include="Callbacks\CallbacksApi.cs" />
     <Compile Include="Callbacks\CallbacksHelper.cs" />
     <Compile Include="Callbacks\CallbacksTaskAdapter.cs" />
+    <Compile Include="Events\EventAdapter.cs" />
+    <Compile Include="Events\EventApi.cs" />
+    <Compile Include="Events\EventToTask.cs" />
+    <Compile Include="Events\FailureEventArgs.cs" />
+    <Compile Include="Events\ResultEventArgs.cs" />
     <Compile Include="ITaskAdapter.cs" />
     <Compile Include="ICompletionTrigger.cs" />
     <Compile Include="Promises\IPromise.cs" />
@@ -52,9 +57,7 @@
     <Compile Include="Promises\SamplePromise.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Events\" />
-  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

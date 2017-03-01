@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Szogun1987.EventsAndTasks.Callbacks;
+using Szogun1987.EventsAndTasks.Events;
 using Szogun1987.EventsAndTasks.Promises;
 using Xunit;
 
@@ -84,6 +85,11 @@ namespace Szogun1987.EventsAndTasks.Tests
                 {
                     var api = new PromisesApi();
                     var adapter = new PromisesAdapter(api);
+                    yield return new object[] { adapter, api };
+                }
+                {
+                    var api = new EventApi();
+                    var adapter = new EventAdapter(api);
                     yield return new object[] { adapter, api };
                 }
             }
