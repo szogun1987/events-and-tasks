@@ -87,7 +87,7 @@ Adaptacja takiej metody do czegoś co zwr&oacute;ci Task z wykorzystaniem TaskCo
 
 <h3>Promise</h3>
 
-<p>Mechanizm spopularyzowany w javascript przez jQuery, w .Net nie zdążył się spopularyzować ale można spotkać chałupnicze jego implementacje. Ponieważ kawałek kodu wyraża więcej niż 1000 sł&oacute;w jeżeli w kodzie istnieje kawałek kodu wyglądający tak:</p>
+<p>Mechanizm obiecanek(Promise) został spopularyzowany w javascript przez jQuery, dobrze przyjął się też w Javie, w .Net nie zdążył bo pojawiło się async/await ale można spotkać chałupnicze jego implementacje. Ponieważ kawałek kodu wyraża więcej niż 1000 sł&oacute;w jeżeli w kodzie istnieje kawałek kodu wyglądający tak:</p>
 
 <p><code>GetNextInt()<br />
 &nbsp;&nbsp;&nbsp;&nbsp;.OnDone(result =&gt; {<br />
@@ -144,12 +144,111 @@ Adaptacja takiej metody do czegoś co zwr&oacute;ci Task z wykorzystaniem TaskCo
 
 <h3>Implementacja naiwna</h3>
 
+<p>Podejście to sprawdza się nie źle w jednym przypadku: akcja się wywołuje jak się uda podejmowane jest jedno zawsze to samo działanie, jak nie to drugie.</p>
+
+<p><code>// Constructor<br />
+public ClientClass()<br />
+{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;_eventApi = new EventApi();<br />
+&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntCompleted += EventApiOnGetNextIntCompleted;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntFailed += EventApiOnGetNextIntFailed;<br />
+}<br />
+<br />
+private void EventApiOnGetNextIntCompleted(object sender, ResultEventArgs resultEventArgs)<br />
+{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(resultEventArgs.Result);<br />
+}<br />
+<br />
+private void EventApiOnGetNextIntFailed(object sender, FailureEventArgs failureEventArgs)<br />
+{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(&quot;Something gone wrong&quot;);<br />
+}</code></p>
+
+<p>Sytuacja jednak komplikuje się znacząco gdy w momencie zakończenia zadania potrzebna jest informacja znana przy jego rozpoczęciu:</p>
+
+<p><code>public void GetNextIntForClient(Client client)<br />
+{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;EventHandler&lt;ResultEventArgs&gt; successHandler = null;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;EventHandler&lt;FailureEventArgs&gt; failureHandler = null;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;successHandler = (sender, args) =&gt;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntCompleted -= successHandler;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntFailed -= failureHandler;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(string.Format(&quot;{1} was chosen for client {0}&quot;, client.Name, args.Result));<br />
+&nbsp;&nbsp;&nbsp;&nbsp;};<br />
+<br />
+&nbsp;&nbsp;&nbsp;&nbsp;failureHandler = (sender, args) =&gt;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntCompleted -= successHandler;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntFailed -= failureHandler;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(string.Format(&quot;Unable to choose value for client {0}&quot;, client.Name));<br />
+&nbsp;&nbsp;&nbsp;&nbsp;};<br />
+&nbsp;&nbsp;&nbsp;&nbsp;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntCompleted += successHandler;<br />
+&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntFailed += failureHandler;<br />
+<br />
+&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextInt();<br />
+}</code></p>
+
+<p>Dla por&oacute;wnania kod oparty o async/await</p>
+
+<p><code>public async void GetNextIntForClient(Client client)<br />
+{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;try<br />
+&nbsp;&nbsp;&nbsp;&nbsp;{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;await _taskApi.GetNextInt();<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(string.Format(&quot;{1} was chosen for client {0}&quot;, client.Name, args.Result));<br />
+&nbsp;&nbsp;&nbsp;&nbsp;}<br />
+&nbsp;&nbsp;&nbsp;&nbsp;catch (Exception exception)<br />
+&nbsp;&nbsp;&nbsp;&nbsp;{<br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(string.Format(&quot;Unable to choose value for client {0}&quot;, client.Name));<br />
+&nbsp;&nbsp;&nbsp;&nbsp;}<br />
+}</code></p>
+
+<p>Opakowanie zdarzeń w zadania nie jest proste i opiera się na kodzie podobnym do tego w metodzie GetNextIntForClient:</p>
+
+<p><code>public Task&lt;int&gt; GetNextInt() <br />
+{ <br />
+&nbsp;&nbsp;&nbsp;&nbsp;var completionSource = new TaskCompletionSource&lt;int&gt;(); <br />
+ <br />
+&nbsp;&nbsp;&nbsp;&nbsp;EventHandler&lt;ResultEventArgs&gt; successHandler = null; <br />
+&nbsp;&nbsp;&nbsp;&nbsp;EventHandler&lt;FailureEventArgs&gt; failureHandler = null; <br />
+ <br />
+&nbsp;&nbsp;&nbsp;&nbsp;successHandler = (sender, args) =&gt; <br />
+&nbsp;&nbsp;&nbsp;&nbsp;{ <br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntCompleted -= successHandler; <br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntFailed -= failureHandler; <br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.TrySetResult(args.Result); <br />
+&nbsp;&nbsp;&nbsp;&nbsp;}; <br />
+ <br />
+&nbsp;&nbsp;&nbsp;&nbsp;failureHandler = (sender, args) =&gt; <br />
+&nbsp;&nbsp;&nbsp;&nbsp;{ <br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntCompleted -= successHandler; <br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntFailed -= failureHandler; <br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.TrySetException(args.Error); <br />
+&nbsp;&nbsp;&nbsp;&nbsp;}; <br />
+ <br />
+&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntCompleted += successHandler; <br />
+&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntFailed += failureHandler; <br />
+ <br />
+&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextInt(); <br />
+ <br />
+&nbsp;&nbsp;&nbsp;&nbsp;return completionSource.Task; <br />
+}</code></p>
+
+<p>Sporo kodu... wypadałoby go skrócić. Napisanie uniwersalnego helpera jest jednak trudniejsze niż się wydaje. Jednym z problemów jest, wspomiany wcześniej, brak mapowania delegat &quot;w locie&quot;. Z moich doświadczeń wynika że twórcy API zazwyczaj korzystają z typów EventHandler, EventHandler&lt;T&gt;, a nawet jeżeli używają innych typów to są spójni w większości API.</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
 <p>&nbsp;</p>
 
-<h2>Ale obiecałeś ... i umarłeś</h2>
+<h2>Obiecał ... i umarł</h2>
+
+<p>Teraz smaczek. Przy używaniu TaskCompletionSource może się zdarzyć że pomimo że wszystkie kolbaki/zdarzenia/obietnice zostaną obsłużone ale mimo kod po await nigdy się nie wywoła. Błąd jednak nie będzie łatwo odtwarzalny.</p>
 
 <p>&nbsp;</p>
 
 <h2>Kody źr&oacute;dłowe</h2>
 
-<p>Kod źr&oacute;dłowy stworzony na potrzeby tego postu udostępniam na <a href="https://github.com/szogun1987/events-and-tasks">githubie</a></p>
+<p>Kod źr&oacute;dłowy projektu stworzonego na potrzeby tego postu udostępniam na <a href="https://github.com/szogun1987/events-and-tasks">githubie</a></p>
