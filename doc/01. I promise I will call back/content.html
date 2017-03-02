@@ -1,131 +1,128 @@
 <p>Słowa kluczowe async i await oraz klasa Task niezaprzeczalnie potrafią niezwykle ułatwić życie programistom C# (w VB.Net ich nie używałem ale podbno też som). Zabawki te są jednak bardzo młode, a .Net jest stary. Programiści pisali kod asynchroniczny tak jak (nie)potrafili i tak jak im środowisko (nie)pozwalało. Microsoft sam zmagał się z problemem adaptacji starego kodu do tego nowego wzorca i stworzył TaskCompletionSource, pozwalającą przerobić cokolwiek na Task&#39;a.</p>
 
+<p>Pierwszy artykuł w serii poświęcę adaptacji API opartego o kolbaki (ang. callbacks) i obiecanki (ang. promises).</p>
+
 <p>Dla niewtajemniczonych: piękne polskie słowo kolbak, kt&oacute;re brzmi znacznie lepiej niż &quot;wywołanie zwrotne&quot;, opisuje rozwiązanie, w kt&oacute;rym metoda jako jeden z argument&oacute;w przyjmuje metodę, kt&oacute;ra ma zostać wywołana gdy kod się wykona.</p>
 
-<p><code>public void GetNextInt(Action&lt;int&gt; callback)<br />
-{<br />
-&nbsp;&nbsp; &nbsp;/* Magic in here */<br />
-&nbsp;&nbsp; &nbsp;callback(123);<br />
-}</code></p>
+<div class="code"><pre class="prettyprint lang-cs">public void GetNextInt(Action&lt;int&gt; callback)
+{
+&nbsp;&nbsp; &nbsp;/* Magic in here */
+&nbsp;&nbsp; &nbsp;callback(123);
+}</pre></div>
 
-<p>Kolbak może też zawierać informację o niepowodzeniu zadania (a nawet powinien). Osobiście spotkałem się z rozwiązaniem w kt&oacute;rym metoda przekazywana jako kolbak przyjmuje wyjątek albo kod błędu.</p>
+<p>Kolbak może, a nawet powinien, zawierać informację o niepowodzeniu zadania. Osobiście spotkałem się z rozwiązaniem w kt&oacute;rym metoda przekazywana jako kolbak przyjmuje wyjątek albo kod błędu.</p>
 
-<p><code>public void GetNextInt(Action&lt;int, Exception&gt; callback)<br />
-{<br />
-&nbsp;&nbsp; &nbsp;try<br />
-&nbsp;&nbsp; &nbsp;{<br />
-&nbsp;&nbsp; &nbsp; &nbsp; &nbsp;/*Magic in here*/<br />
-&nbsp;&nbsp; &nbsp; &nbsp; &nbsp;callback(123, null);<br />
-&nbsp;&nbsp; &nbsp;}<br />
-&nbsp;&nbsp; &nbsp;catch(Exception ex)<br />
-&nbsp; &nbsp; {<br />
-&nbsp;&nbsp; &nbsp; &nbsp; &nbsp;callback(default(int), ex);<br />
-&nbsp;&nbsp; &nbsp;}<br />
-}</code></p>
+<div class="code"><pre class="prettyprint lang-cs">public void GetNextInt(Action&lt;int, Exception&gt; callback)
+{
+&nbsp;&nbsp; &nbsp;try
+&nbsp;&nbsp; &nbsp;{
+&nbsp;&nbsp; &nbsp; &nbsp; &nbsp;/*Magic in here*/
+&nbsp;&nbsp; &nbsp; &nbsp; &nbsp;callback(123, null);
+&nbsp;&nbsp; &nbsp;}
+&nbsp;&nbsp; &nbsp;catch(Exception ex)
+&nbsp; &nbsp; {
+&nbsp;&nbsp; &nbsp; &nbsp; &nbsp;callback(default(int), ex);
+&nbsp;&nbsp; &nbsp;}
+}</pre></div>
 
 <p>Na kolbaki można się też natknąć w czasie integracji z innymi technologiami bo wspierają je wszyscy: C++, Javascript, Phyton, PHP, Java ... przepraszam Java jednak nie :-D.<br />
 Adaptacja takiej metody do czegoś co zwr&oacute;ci Task z wykorzystaniem TaskCompletionSource jest łatwa.</p>
 
-<p><code>public Task GetNextInt()<br />
-{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;var completionSource = new TaskCompletionSource();<br />
-<br />
-&nbsp;&nbsp;&nbsp;&nbsp;GetNextInt((result, exception) =&gt;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (exception != null)<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.SetException(exception);<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.SetResult(result);<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br />
-&nbsp;&nbsp;&nbsp;&nbsp;});<br />
-<br />
-&nbsp;&nbsp;&nbsp;&nbsp;return completionSource.Task;<br />
-}</code></p>
+<div class="code"><pre class="prettyprint lang-cs">public Task GetNextInt()
+{
+&nbsp;&nbsp;&nbsp;&nbsp;var completionSource = new TaskCompletionSource();
 
-<p>Teraz drobne ostrzeżenie. Zdarza się że callback jest wywoływany kilka razy. TaskCompletionSource nie lubi tego i wywołanie SetException albo SetResult spowoduje wyjątek. W takim przypadku należy upomnieć tw&oacute;rcę kodu, że robi źle, jeżeli to nie pomaga należy użyć środk&oacute;w przymusu bezpośredniego, jak to nie skutkuje należy upewnić się że napisał taki kod ostatni raz. Jeżeli jednak i to jest niemożliwe, ponieważ ktoś już go zdążył zastrzelić należy spr&oacute;bować zorientować kt&oacute;ry CompletionHandler jest tym właściwym, albo założyć że pierwsze wywołanie jest dobre wystarczająco i użyć metod TrySetResult i TrySetException.</p>
+&nbsp;&nbsp;&nbsp;&nbsp;GetNextInt((result, exception) =&gt;
+&nbsp;&nbsp;&nbsp;&nbsp;{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (exception != null)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.SetException(exception);
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.SetResult(result);
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+&nbsp;&nbsp;&nbsp;&nbsp;});
 
-<p>W tym miejscu chciałbym zaproponować użycie następującego helpera</p>
+&nbsp;&nbsp;&nbsp;&nbsp;return completionSource.Task;
+}</pre></div>
 
-<p><code>public Task Invoke&lt;T&gt;(Action&lt;T&gt; methodToInvoke)<br />
-{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;var completionSource = new TaskCompletionSource&lt;T&gt;();<br />
-&nbsp;&nbsp;&nbsp;&nbsp;methodToInvoke((result, exception) =&gt;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (exception != null)<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.SetException(exception);<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.SetResult(result);<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br />
-&nbsp;&nbsp;&nbsp;&nbsp;});<br />
-}</code></p>
+<p>Taki kod może spowodować przewrócenie się aplikacji. Może się zdarzyć się że callback zostanie wywoływany kilka razy (kompilacja tego nie pilnuje). TaskCompletionSource nie lubi wielokrotnego wywoływania SetException albo SetResult i zgłasza wyjątek. W takim wypadku należy upomnieć tw&oacute;rcę kodu że robi źle, jeżeli to nie pomaga należy użyć środk&oacute;w przymusu bezpośredniego, jak to nie skutkuje należy upewnić się że napisał taki kod ostatni raz. Jeżeli jednak i to jest niemożliwe, ponieważ ktoś już go zdążył zastrzelić należy spr&oacute;bować zorientować kt&oacute;ry kolbak jest tym właściwym, jeżeli pierwszy jest dobry wystarczająco to klasa TaskCompletionSource posiada metody TrySetResult i TrySetException, które nie powodują wyjątku przy wielokrotnym wywoływaniu.</p>
 
-<p>Użycie tego helpera opakowanie kolbaka do taska do:</p>
+<p>Ten kod może nie jest skomplikowany, ale przy pisaniu go 20 raz można się pomylić, dlatego dobrym pomysłem może być napisanie takiego helpera:</p>
 
-<p><code>public Task GetNextInt()<br />
-{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;return Invoke(GetNextInt);<br />
-}</code></p>
+<div class="code"><pre class="prettyprint lang-cs">public Task Invoke&lt;T&gt;(Action&lt;T&gt; methodToInvoke)
+{
+&nbsp;&nbsp;&nbsp;&nbsp;var completionSource = new TaskCompletionSource&lt;T&gt;();
+&nbsp;&nbsp;&nbsp;&nbsp;methodToInvoke((result, exception) =&gt;
+&nbsp;&nbsp;&nbsp;&nbsp;{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (exception != null)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.SetException(exception);
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.SetResult(result);
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+&nbsp;&nbsp;&nbsp;&nbsp;});
+}</pre></div>
+
+<p>Użycie tego helpera skraca kod do:</p>
+
+<div class="code"><pre class="prettyprint lang-cs">public Task GetNextInt()
+{
+&nbsp;&nbsp;&nbsp;&nbsp;return Invoke(GetNextInt);
+}</pre></div>
 
 <p>a w przypadku gdy metoda przyjmuje argumenty:</p>
 
-<p><code>public Task GetNextInt(string argument)<br />
-{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;return Invoke((handler) =&gt; GetNextInt(argument, handler));<br />
-}</code></p>
+<div class="code"><pre class="prettyprint lang-cs">public Task GetNextInt(string argument)
+{
+&nbsp;&nbsp;&nbsp;&nbsp;return Invoke((handler) =&gt; GetNextInt(argument, handler));
+}</pre></div>
 
-<p>Ten helper sprawdzi się jeżeli API używa typu Action jako callbacku, adaptacja API, kt&oacute;re używa innego typu też nie powinna być trudna (sprowadza się do zmiany typu przyjmowanego jako argument helpera). Problem pojawia się gdy API używa r&oacute;żnych typ&oacute;w dla kolbak&oacute;w. Niestety Csharp ma ograniczenie i nie potrafi &quot;w locie&quot; przetłumaczyć typ&oacute;w oznaczanych słowem delegate nawet jeżeli mają takie same wejścia i wyjścia (np. nie da się przekazać Action&lt;object, EventArgs&gt; jako EventHandlera). W tym przypadku pozostaje pisać wszystko z palca, napisać generator kodu, albo pr&oacute;bować ugryźć to refleksją.</p>
+<p>Ten helper sprawdzi się jeżeli API używa typu Action jako kolbaka, adaptacja API, kt&oacute;re używa innego typu też nie powinna być trudna (sprowadza się do zmiany typu przyjmowanego jako argument helpera). Problem pojawia się gdy API używa r&oacute;żnych typ&oacute;w dla kolbak&oacute;w. Niestety Csharp ma ograniczenie i nie potrafi &quot;w locie&quot; przetłumaczyć typ&oacute;w oznaczanych słowem delegate nawet jeżeli mają takie same wejścia i wyjścia (np. nie da się przekazać Action&lt;object, EventArgs&gt; jako EventHandlera). W tym przypadku można pisać wszystko z palca, napisać generator kodu, albo pr&oacute;bować ugryźć to refleksją.</p>
 
 <h3>Promise</h3>
 
-<p>Mechanizm obiecanek(Promise) został spopularyzowany w javascript przez jQuery, dobrze przyjął się też w Javie, w .Net nie zdążył bo pojawiło się async/await ale można spotkać chałupnicze jego implementacje. Ponieważ kawałek kodu wyraża więcej niż 1000 sł&oacute;w jeżeli w kodzie istnieje kawałek kodu wyglądający tak:</p>
+<p>Mechanizm obiecanek(Promise) został spopularyzowany w javascript przez jQuery, dobrze przyjął się też w Javie, w .Net nie zdążył bo pojawiło się async/await ale można spotkać chałupnicze jego implementacje. Ponieważ kawałek kodu wyraża więcej niż 1000 sł&oacute;w to jeżeli w kodzie istnieje kawałek kodu wyglądający tak:</p>
 
-<p><code>GetNextInt()<br />
-&nbsp;&nbsp;&nbsp;&nbsp;.OnDone(result =&gt; {<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* Wyświetl wynik */<br />
-&nbsp; &nbsp; &nbsp; &nbsp; MessageBox.Show(&quot;Wynik to &quot; + result);<br />
-&nbsp;&nbsp;&nbsp;&nbsp;}).OnError(error =&gt; {<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.ShowError(&quot;Coś poszło nie tak.&quot;)<br />
-&nbsp;&nbsp;&nbsp;&nbsp;}).Always(() =&gt; {<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* Schowaj kręcioła */<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;HideSpinner();<br />
-&nbsp;&nbsp;&nbsp;&nbsp;});</code></p>
+<div class="code"><pre class="prettyprint lang-cs">GetNextInt()
+&nbsp;&nbsp;&nbsp;&nbsp;.OnDone(result =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* Wyświetl wynik */
+&nbsp; &nbsp; &nbsp; &nbsp; MessageBox.Show(&quot;Wynik to &quot; + result);
+&nbsp;&nbsp;&nbsp;&nbsp;}).OnError(error =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.ShowError(&quot;Coś poszło nie tak.&quot;)
+&nbsp;&nbsp;&nbsp;&nbsp;}).Always(() =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* Schowaj kręcioła */
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;HideSpinner();
+&nbsp;&nbsp;&nbsp;&nbsp;});</pre></div>
 
-<p>to na 99% GetNextInt zwraca Promise&lt;T&gt; albo IPromise&lt;T&gt;. Adaptacja Promise do Task jest trywialna:</p>
+<p>to na 99% GetNextInt zwraca Promise&lt;T&gt; albo IPromise&lt;T&gt;. Adaptacja Promise do Task jest nawet łatwiejsza niż kolbaka:</p>
 
-<p><code>public Taks&lt;T&gt; Wrap(this IPromise&lt;T&gt; promise)<br />
-{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;var taskCompletionSource = new TaskCompletionSource&lt;T&gt;();<br />
-&nbsp;&nbsp;&nbsp;&nbsp;promise<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.OnDone(result =&gt; {<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;taskCompletionSource.SetResult(result)<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}).OnError(error =&gt; {<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;taskCompletionSource.SetException(error);<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;});<br />
-&nbsp;&nbsp;&nbsp;&nbsp;return taskCompletionSource.Task;<br />
-}</code></p>
+<div class="code"><pre class="prettyprint lang-cs">public Taks&lt;T&gt; Wrap(this IPromise&lt;T&gt; promise)
+{
+&nbsp;&nbsp;&nbsp;&nbsp;var taskCompletionSource = new TaskCompletionSource&lt;T&gt;();
+&nbsp;&nbsp;&nbsp;&nbsp;promise
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.OnDone(result =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;taskCompletionSource.SetResult(result)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}).OnError(error =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;taskCompletionSource.SetException(error);
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;});
+&nbsp;&nbsp;&nbsp;&nbsp;return taskCompletionSource.Task;
+}</pre></div>
 
-<p>albo nawet trywialniejsza:</p>
+<p>a może być jeszcze łatwiejsza:</p>
 
-<p><code>public Taks&lt;T&gt; Wrap&lt;T&gt;(this IPromise&lt;T&gt; promise)<br />
-{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;var taskCompletionSource = new TaskCompletionSource&lt;T&gt;();<br />
-&nbsp;&nbsp;&nbsp;&nbsp;promise<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.OnDone(taskCompletionSource.SetResult)<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.OnError(taskCompletionSource.SetException);<br />
-&nbsp;&nbsp;&nbsp;&nbsp;return taskCompletionSource.Task;<br />
-}</code></p>
+<div class="code"><pre class="prettyprint lang-cs">public Taks&lt;T&gt; Wrap&lt;T&gt;(this IPromise&lt;T&gt; promise)
+{
+&nbsp;&nbsp;&nbsp;&nbsp;var taskCompletionSource = new TaskCompletionSource&lt;T&gt;();
+&nbsp;&nbsp;&nbsp;&nbsp;promise
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.OnDone(taskCompletionSource.SetResult)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.OnError(taskCompletionSource.SetException);
+&nbsp;&nbsp;&nbsp;&nbsp;return taskCompletionSource.Task;
+}</pre></div>
 
-
-
-<h2>Obiecał ... i umarł</h2>
-
-<p>Teraz smaczek. Przy używaniu TaskCompletionSource może się zdarzyć że pomimo że wszystkie kolbaki/zdarzenia/obietnice zostaną obsłużone ale mimo kod po await nigdy się nie wywoła. Błąd jednak nie będzie łatwo odtwarzalny.</p>
 
 <p>&nbsp;</p>
 
