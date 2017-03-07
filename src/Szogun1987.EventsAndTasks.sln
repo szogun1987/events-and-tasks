@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Szogun1987.EventsAndTasks",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Szogun1987.EventsAndTasks.Tests", "Szogun1987.EventsAndTasks.Tests\Szogun1987.EventsAndTasks.Tests.csproj", "{EFD405A1-638D-4F56-BBBB-E1B3714E33BA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Szogun1987.EventsAndTasks.NonBuilding", "Szogun1987.EventsAndTasks.NonBuilding\Szogun1987.EventsAndTasks.NonBuilding.csproj", "{1FBF730A-4B63-4E47-A147-668FFC41C9ED}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{EFD405A1-638D-4F56-BBBB-E1B3714E33BA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EFD405A1-638D-4F56-BBBB-E1B3714E33BA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EFD405A1-638D-4F56-BBBB-E1B3714E33BA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1FBF730A-4B63-4E47-A147-668FFC41C9ED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1FBF730A-4B63-4E47-A147-668FFC41C9ED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1FBF730A-4B63-4E47-A147-668FFC41C9ED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1FBF730A-4B63-4E47-A147-668FFC41C9ED}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

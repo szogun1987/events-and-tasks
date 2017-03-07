@@ -4,11 +4,11 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{FFB6B640-0CF8-4D4A-9354-D9D3C55ED77A}</ProjectGuid>
+    <ProjectGuid>{1FBF730A-4B63-4E47-A147-668FFC41C9ED}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Szogun1987.EventsAndTasks</RootNamespace>
-    <AssemblyName>Szogun1987.EventsAndTasks</AssemblyName>
+    <RootNamespace>Szogun1987.EventsAndTasks.NonBuilding</RootNamespace>
+    <AssemblyName>Szogun1987.EventsAndTasks.NonBuilding</AssemblyName>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
@@ -40,25 +40,16 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Callbacks\CallbacksApi.cs" />
-    <Compile Include="Callbacks\CallbacksHelper.cs" />
-    <Compile Include="Callbacks\CallbacksTaskAdapter.cs" />
     <Compile Include="Events\EventAdapter.cs" />
-    <Compile Include="Events\EventApi.cs" />
-    <Compile Include="Events\EventToTask.Generic.cs" />
-    <Compile Include="Events\EventToTask.Generic2.cs" />
-    <Compile Include="Events\FailureEventArgs.cs" />
-    <Compile Include="Events\ResultEventArgs.cs" />
-    <Compile Include="ITaskAdapter.cs" />
-    <Compile Include="ICompletionTrigger.cs" />
-    <Compile Include="Promises\IPromise.cs" />
-    <Compile Include="Promises\PromisesAdapter.cs" />
-    <Compile Include="Promises\PromisesApi.cs" />
-    <Compile Include="Promises\PromisesExtensions.cs" />
-    <Compile Include="Promises\SamplePromise.cs" />
+    <Compile Include="Events\EventToTask.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <ProjectReference Include="..\Szogun1987.EventsAndTasks\Szogun1987.EventsAndTasks.csproj">
+      <Project>{ffb6b640-0cf8-4d4a-9354-d9d3c55ed77a}</Project>
+      <Name>Szogun1987.EventsAndTasks</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
