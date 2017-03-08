@@ -43,6 +43,9 @@
     <Compile Include="Callbacks\CallbacksApi.cs" />
     <Compile Include="Callbacks\CallbacksHelper.cs" />
     <Compile Include="Callbacks\CallbacksTaskAdapter.cs" />
+    <Compile Include="Callbacks\NeverCalledback\BrokenTaskAdapter.cs" />
+    <Compile Include="Callbacks\NeverCalledback\FixedTaskAdapter.cs" />
+    <Compile Include="Callbacks\NeverCalledback\WorkedAroundAdapter.cs" />
     <Compile Include="Events\EventAdapter.cs" />
     <Compile Include="Events\EventApi.cs" />
     <Compile Include="Events\EventToTask.Generic.cs" />
