@@ -1,121 +1,109 @@
-<h2>Asynchroniczność przez zdarzenia</h2>
+<p>Trzecią i ostatnią część artykułu poświęcam rzadkiemu ale bardzo trudnemu w analizie problemowi, który może pojawić się w czasie adaptacji API w wykorzystaniem TaskCompletionSource.</p>
+<p>Zacznę od takiego niewinnego kawałku kodu:</p>
+<div class="code"><pre class="prettyprint lang-cs">class Adapter
+{
+    public Task&lt;int&gt; GetNextInt()
+    {
+        var api = new CallbacksApi();
+        var taskCompletionSource = new TaskCompletionSource&lt;int&gt;();
+    
+        api.GetNextInt((result, exception) =&gt;
+        {
+            if (exception != null)
+            {
+                taskCompletionSource.SetException(exception);
+            }
+            else
+            {
+                taskCompletionSource.SetResult(result);
+            }
+        });
+        
+        return taskCompletionSource.Task;
+    }
+}</pre></div>
+<p>Kod wydaje się poprawny. Co lepsze będzie działać w czasie testów dymnych, prawdopodobnie przejdzie testy funkcjonalne. Kod ten może jednak powodować pojawianie się błędów typu: &quot;Ta operacja czasami nie kończy się przez pół godziny&quot;, &quot;aplikacja chodzi wolno&quot; albo &quot;program się zawiesza&quot;. Co gorsza nikt nie będzie w stanie dostarczyć powtarzalnego scenariusza.</p>
+<p>Winnym okazuje się być Garbage Collector, który może w tym przypadku błędnie stwierdzić, że nikt nie potrzebuje obiektu CallbacksApi, bo nikt nie posiada do niego referencji.</p>
+<img src="http://static.szogun1987.pl/img/events-and-tasks/ObjectReferences.svg" alt="Referencje pomiędzy obiektami" class="img-responsive" />
+<p>Pierwszym sposobem &quot;obejścia&quot; tego problemu może być &quot;przytrzymanie&quot; referencji do API w jakimś obiekcie, który żyje dłużej. W kodzie powyżej może być to klasa obiekt typu Adapter.</p>
+<div class="code"><pre class="prettyprint lang-cs">class Adapter
+{
+    private CallbacksApi _api = new CallbacksApi();
+    public Task&lt;int&gt; GetNextInt()
+    {
+        var taskCompletionSource = new TaskCompletionSource&lt;int&gt;();
+    
+        _api.GetNextInt((result, exception) =&gt;
+        {
+            if (exception != null)
+            {
+                taskCompletionSource.SetException(exception);
+            }
+            else
+            {
+                taskCompletionSource.SetResult(result);
+            }
+        });
+        
+        return taskCompletionSource.Task;
+    }
+}</pre></div>
+<p>Sprawa się komplikuje gdy nowe CallbacksApi musi być tworzone z każdym wywołaniem GetNextInt. Brzydkim ale szybkim obejściem tego problemu jest użycie kolekcji:</p>
+<div class="code"><pre class="prettyprint lang-cs">class Adapter
+{
+    private List&lt;CallbacksApi&gt; _apiReferences = new List&lt;CallbacksApi&gt;();
+    private object _apiReferencesLockRoot = new object();
+    public Task&lt;int&gt; GetNextInt()
+    {
+        var api = new CallbacksApi();
+        var taskCompletionSource = new TaskCompletionSource&lt;int&gt;();
+        lock(_apiReferencesLockRooti)
+        {
+            _apiReferences.Add(api);
+        }
+    
+        api.GetNextInt((result, exception) =&gt;
+        {
+            lock(_apiReferencesLockRooti)
+            {
+                _apiReferences.Add(api);
+            }
+            if (exception != null)
+            {
+                taskCompletionSource.SetException(exception);
+            }
+            else
+            {
+                taskCompletionSource.SetResult(result);
+            }
+        });
+        
+        return taskCompletionSource.Task;
+    }
+}</pre></div>
+<p>Ten kod działa ale wszyscy się chyba zgodzą że najładniejszy to on nie jest. W dodatku jeżeli referencja do obiektu typu Adapter nie jest nigdzie przetrzymywana przez dłuższy czas to powyższe rozwiązania i tak nie zadziałają. Na szczęście Microsoft pomyślał o tym problemie i TaskCompletionSource posiada dodatkowy parametr konstruktora &quot;state&quot;, którego można przekazać cokolwiek. Obiekt ten jest przypisany do właściwości AsyncState wynikowego Taska, przez co GC zostawi go w spokoju.</p>
+<div class="code"><pre class="prettyprint lang-cs">class Adapter
+{
+    public Task&lt;int&gt; GetNextInt()
+    {
+        var api = new CallbacksApi();
+        var taskCompletionSource = new TaskCompletionSource&lt;int&gt;(api);
+    
+        api.GetNextInt((result, exception) =&gt;
+        {
+            if (exception != null)
+            {
+                taskCompletionSource.SetException(exception);
+            }
+            else
+            {
+                taskCompletionSource.SetResult(result);
+            }
+        });
+        
+        return taskCompletionSource.Task;
+    }
+}</pre></div>
 
-<p>Jedną z pr&oacute;b ogarnięcia asynchroniczności było wykorzystanie mechanizmu zdarzeń (event). Onegdaj istniały takie technologie jak WCF - służący do wystawiania na świat&nbsp;API po http oraz Silverlight, kt&oacute;ry miał robić to co dzisiaj <s>Flash</s> javascript. I jak się tworzyło połączenia między SL a WCF to powstawały klasy pasujące do szablonu:</p>
-
-<p><code>public class Proxy<br />
-{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;void Method1(int argument);<br />
-&nbsp;&nbsp;&nbsp;&nbsp;event EventHandler&lt;EventArgs&lt;Result1&gt;&gt; Method1Completed;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;event EventHandler&lt;FailureEventArgs&gt; Method1Failed;<br />
-<br />
-&nbsp;&nbsp;&nbsp;&nbsp;void Method2();<br />
-&nbsp;&nbsp;&nbsp;&nbsp;event EventHandler&lt;EventArgs&lt;Result2&gt;&gt; Method1Completed;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;event EventHandler&lt;FailureEventArgs&gt; Method1Failed;<br />
-}</code></p>
-
-<p>Ale poczułem się staro. Podobny wzorzec był stosowany też w innych technologiach. Ma on wiele wad w por&oacute;wnaniu do kolbak&oacute;w. Na początek nie istnieje żadna gwarancja że jeżeli wywołam Method1 z argumentem 1 po czym wywołam Method1 z argumentem 2 to event Method1Completed dla 1 przyjdzie przez tym samym eventem dla 2. Na potrzeby dalszych rozważań uznam, że opakowanie w Task i użycie sł&oacute;w async i await sprawi że wywołanie z 2 nie nastąpi przez eventem dla 1, co nie musi być prawdą ale zazwyczaj jest.</p>
-
-<h3>Implementacja naiwna</h3>
-
-<p>Podejście to sprawdza się nie źle w jednym przypadku: akcja się wywołuje jak się uda podejmowane jest jedno zawsze to samo działanie, jak nie to drugie.</p>
-
-<p><code>// Constructor<br />
-public ClientClass()<br />
-{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;_eventApi = new EventApi();<br />
-&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntCompleted += EventApiOnGetNextIntCompleted;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntFailed += EventApiOnGetNextIntFailed;<br />
-}<br />
-<br />
-private void EventApiOnGetNextIntCompleted(object sender, ResultEventArgs resultEventArgs)<br />
-{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(resultEventArgs.Result);<br />
-}<br />
-<br />
-private void EventApiOnGetNextIntFailed(object sender, FailureEventArgs failureEventArgs)<br />
-{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(&quot;Something gone wrong&quot;);<br />
-}</code></p>
-
-<p>Sytuacja jednak komplikuje się znacząco gdy w momencie zakończenia zadania potrzebna jest informacja znana przy jego rozpoczęciu:</p>
-
-<p><code>public void GetNextIntForClient(Client client)<br />
-{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;EventHandler&lt;ResultEventArgs&gt; successHandler = null;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;EventHandler&lt;FailureEventArgs&gt; failureHandler = null;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;successHandler = (sender, args) =&gt;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntCompleted -= successHandler;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntFailed -= failureHandler;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(string.Format(&quot;{1} was chosen for client {0}&quot;, client.Name, args.Result));<br />
-&nbsp;&nbsp;&nbsp;&nbsp;};<br />
-<br />
-&nbsp;&nbsp;&nbsp;&nbsp;failureHandler = (sender, args) =&gt;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntCompleted -= successHandler;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntFailed -= failureHandler;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(string.Format(&quot;Unable to choose value for client {0}&quot;, client.Name));<br />
-&nbsp;&nbsp;&nbsp;&nbsp;};<br />
-&nbsp;&nbsp;&nbsp;&nbsp;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntCompleted += successHandler;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntFailed += failureHandler;<br />
-<br />
-&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextInt();<br />
-}</code></p>
-
-<p>Dla por&oacute;wnania kod oparty o async/await</p>
-
-<p><code>public async void GetNextIntForClient(Client client)<br />
-{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;try<br />
-&nbsp;&nbsp;&nbsp;&nbsp;{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;await _taskApi.GetNextInt();<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(string.Format(&quot;{1} was chosen for client {0}&quot;, client.Name, args.Result));<br />
-&nbsp;&nbsp;&nbsp;&nbsp;}<br />
-&nbsp;&nbsp;&nbsp;&nbsp;catch (Exception exception)<br />
-&nbsp;&nbsp;&nbsp;&nbsp;{<br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(string.Format(&quot;Unable to choose value for client {0}&quot;, client.Name));<br />
-&nbsp;&nbsp;&nbsp;&nbsp;}<br />
-}</code></p>
-
-<p>Opakowanie zdarzeń w zadania nie jest proste i opiera się na kodzie podobnym do tego w metodzie GetNextIntForClient:</p>
-
-<p><code>public Task&lt;int&gt; GetNextInt() <br />
-{ <br />
-&nbsp;&nbsp;&nbsp;&nbsp;var completionSource = new TaskCompletionSource&lt;int&gt;(); <br />
- <br />
-&nbsp;&nbsp;&nbsp;&nbsp;EventHandler&lt;ResultEventArgs&gt; successHandler = null; <br />
-&nbsp;&nbsp;&nbsp;&nbsp;EventHandler&lt;FailureEventArgs&gt; failureHandler = null; <br />
- <br />
-&nbsp;&nbsp;&nbsp;&nbsp;successHandler = (sender, args) =&gt; <br />
-&nbsp;&nbsp;&nbsp;&nbsp;{ <br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntCompleted -= successHandler; <br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntFailed -= failureHandler; <br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.TrySetResult(args.Result); <br />
-&nbsp;&nbsp;&nbsp;&nbsp;}; <br />
- <br />
-&nbsp;&nbsp;&nbsp;&nbsp;failureHandler = (sender, args) =&gt; <br />
-&nbsp;&nbsp;&nbsp;&nbsp;{ <br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntCompleted -= successHandler; <br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntFailed -= failureHandler; <br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completionSource.TrySetException(args.Error); <br />
-&nbsp;&nbsp;&nbsp;&nbsp;}; <br />
- <br />
-&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntCompleted += successHandler; <br />
-&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextIntFailed += failureHandler; <br />
- <br />
-&nbsp;&nbsp;&nbsp;&nbsp;_eventApi.GetNextInt(); <br />
- <br />
-&nbsp;&nbsp;&nbsp;&nbsp;return completionSource.Task; <br />
-}</code></p>
-
-<p>Sporo kodu... wypadałoby go skrócić. Napisanie uniwersalnego helpera jest jednak trudniejsze niż się wydaje. Jednym z problemów jest, wspomiany wcześniej, brak mapowania delegat &quot;w locie&quot;. Z moich doświadczeń wynika że twórcy API zazwyczaj korzystają z typów EventHandler, EventHandler&lt;T&gt;, a nawet jeżeli używają innych typów to są spójni w większości API.</p>
-<p>&nbsp;</p>
-<p>&nbsp;</p>
-<p>&nbsp;</p>
-<p>&nbsp;</p>
-
-<h2>Kody źr&oacute;dłowe</h2>
-
-<p>Kod źr&oacute;dłowy projektu stworzonego na potrzeby tej serii udostępniam na <a href="https://github.com/szogun1987/events-and-tasks">githubie</a></p>
+<p>Kod klas, które stworzyłem na potrzeby tego wpisu znajduje się w tym punkie <a href="https://github.com/szogun1987/events-and-tasks/tree/master/src/Szogun1987.EventsAndTasks/Callbacks/NeverCalledback">Githuba</a>, natomiast testy do nich <a href="hhttps://github.com/szogun1987/events-and-tasks/blob/master/src/Szogun1987.EventsAndTasks.Tests/NeverCalledBackTests.cs">tutaj</a>. Testy zwracają oczekiwany wynik tylko po zbudowaniu projektu w trybie Release, a właściwie to nie do końca zwracają. Test dla klasy FixedAdapter przechodzi i tak ma być. Test dla klasy BrokenAdapter nie przechodzi i to także jest zgodne z moimi oczekiwaniami.</p>
+<p>Mam natomiast problem z testem dla klasy WorkedAroundAdapter, teoretycznie linijka Assert.NotNull(adapter) powinna sprawić że test przejdzie, ten jednak przejść nie chce i nie mam pojęcia dlaczego. Postanowiłem więc postawić znaczną ilość piwa, zgrzewkę 24 Tyskiego albo jego równowartość w innym gatunku, pierwszej osobie która mi to wytłumaczy.</p>
