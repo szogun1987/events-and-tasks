@@ -1,8 +1,12 @@
-<p>Słowa kluczowe async i await oraz klasa Task niezaprzeczalnie potrafią niezwykle ułatwić życie programistom C# (w VB.Net ich nie używałem ale podbno też som). Zabawki te są jednak bardzo młode, a .Net jest stary. Programiści pisali kod asynchroniczny tak jak (nie)potrafili i tak jak im środowisko (nie)pozwalało. Microsoft sam zmagał się z problemem adaptacji starego kodu do tego nowego wzorca i stworzył TaskCompletionSource, pozwalającą przerobić cokolwiek na Task&#39;a.</p>
+<p>Programowanie asynchroniczne w C# stało całkiem znośne od kiedy język ten posiada słowa kluczowe async i await. Rozwiązanie to tak udało się tak dobrze, że zaczyna pojawiać się w innych językach. VB.Net podobno już je ma (może któryś z czytelników już go używał i mógłby podzielić się swoimi doświadczeniami?), architekci projektujący C++ i Javascript także nad usilnie pracują na wdrożeniem podobnych mechanizmów.</p>
 
-<p>Pierwszy artykuł w serii poświęcę adaptacji API opartego o kolbaki (ang. callbacks) i obiecanki (ang. promises).</p>
+<p>Wielu z nas, programistów, jest jednak do dzisiaj zmuszonych pisać asynchronicznie tak jak (nie)potrafi i tak środowisko im na to (nie)pozwala. Nawet w C# sytuacja nie wygląda kolorowo, klasa Task umożliwia użycie jej w tandemie z async i await zaledwie od 4 lat. Żaden kod napisany przez pierwsze 11 lat istnienia .Net nie miał szans ich użycia. Kod napisany później także niekoniecznie z niego korzysta.</p>
 
-<p>Dla niewtajemniczonych: piękne polskie słowo kolbak, kt&oacute;re brzmi znacznie lepiej niż &quot;wywołanie zwrotne&quot;, opisuje rozwiązanie, w kt&oacute;rym metoda jako jeden z argument&oacute;w przyjmuje metodę, kt&oacute;ra ma zostać wywołana gdy kod się wykona.</p>
+<p>Myślę, że w takiej sytuacji adaptacja starego API na własną rękę może być opłacalna, dlatego postanowiłem popełnić serię artykułów pokazujących jak można się za to zabrać.
+Na szczęście Microsoft szybko zauważył problem adaptacji starego kodu do nowego wzorca, czego efektem jest TaskCompletionSource, który umożliwia przetworzenie czegokolwiek na Task’a.
+</p>
+<p>W pierwszej części chciałbym pokazać adaptację API opartego na kolbakach (ang.callbacks) i obiecankach (ang. Promises).</p>
+<p>Wiele angielskich słów nie ma idealnego tłumaczenia, „callback” nie jest tu wyjątkiem. Programiści rozumieją je jako „wywołanie zwrotne”, jednak nikt tak nie mówi, na co dzień używam pięknego słowa „kolbak” i tak będę robił dalej. Dla niewtajemniczonych kolbak opisuje rozwiązanie, w którym metoda jako jeden z argumentów przyjmuje inną metodę, która jest wywoływana po zakończeniu operacji.</p>
 
 <div class="code"><pre class="prettyprint lang-cs">public void GetNextInt(Action&lt;int&gt; callback)
 {
@@ -10,7 +14,7 @@
 &nbsp;&nbsp; &nbsp;callback(123);
 }</pre></div>
 
-<p>Kolbak może, a nawet powinien, zawierać informację o niepowodzeniu zadania. Osobiście spotkałem się z rozwiązaniem w kt&oacute;rym metoda przekazywana jako kolbak przyjmuje wyjątek albo kod błędu.</p>
+<p>„We will call back to you” w dosłownym tłumaczeniu oznacza „Oddzwonimy do ciebie”. Często to słyszymy, a jak często otrzymujemy telefon gdy coś pójdzie nie tak? I jak się czujemy gdy ktoś długo nie oddzwania? Podobnie czuje się kod i programista, który go napisał, gdy wywołuje metodę z kolbakiem, a ten nigdy nie następuje. Dlatego dobrą praktyką jest przekazanie kodu błędu albo wyjątku jako dodatkowego parametru kolbaka.</p>
 
 <div class="code"><pre class="prettyprint lang-cs">public void GetNextInt(Action&lt;int, Exception&gt; callback)
 {
@@ -25,8 +29,7 @@
 &nbsp;&nbsp; &nbsp;}
 }</pre></div>
 
-<p>Na kolbaki można się też natknąć w czasie integracji z innymi technologiami bo wspierają je wszyscy: C++, Javascript, Phyton, PHP, Java ... przepraszam Java jednak nie :-D.<br />
-Adaptacja takiej metody do czegoś co zwr&oacute;ci Task z wykorzystaniem TaskCompletionSource jest łatwa.</p>
+<p>Kolbaki nie są niczym nowym, bo praktycznie każda technologia je wspiera: C++, Javascript, Python, PHP, Java (….aaa nie, przepraszam! Java jednak nie :D), dlatego adaptacja takiej metody do czegoś, co zwróci Taska z wykorzystaniem TaskCompletionSource to nic trudnego.</p>
 
 <div class="code"><pre class="prettyprint lang-cs">public Task GetNextInt()
 {
@@ -49,7 +52,7 @@ Adaptacja takiej metody do czegoś co zwr&oacute;ci Task z wykorzystaniem TaskCo
 
 <p>Taki kod może spowodować przewrócenie się aplikacji. Może się zdarzyć się że callback zostanie wywoływany kilka razy (kompilacja tego nie pilnuje). TaskCompletionSource nie lubi wielokrotnego wywoływania SetException albo SetResult i zgłasza wyjątek. W takim wypadku należy upomnieć tw&oacute;rcę kodu że robi źle, jeżeli to nie pomaga należy użyć środk&oacute;w przymusu bezpośredniego, jak to nie skutkuje należy upewnić się że napisał taki kod ostatni raz. Jeżeli jednak i to jest niemożliwe, ponieważ ktoś już go zdążył zastrzelić należy spr&oacute;bować zorientować kt&oacute;ry kolbak jest tym właściwym, jeżeli pierwszy jest dobry wystarczająco to klasa TaskCompletionSource posiada metody TrySetResult i TrySetException, które nie powodują wyjątku przy wielokrotnym wywoływaniu.</p>
 
-<p>Ten kod może nie jest skomplikowany, ale przy pisaniu go 20 raz można się pomylić, dlatego dobrym pomysłem może być napisanie takiego helpera:</p>
+<p>Powyższy kod może nie jest może skomplikowany, ale przy pisaniu go 20 raz można się pomylić, dlatego dobrym pomysłem może być napisanie takiego helpera:</p>
 
 <div class="code"><pre class="prettyprint lang-cs">public Task Invoke&lt;T&gt;(Action&lt;T&gt; methodToInvoke)
 {
@@ -67,25 +70,26 @@ Adaptacja takiej metody do czegoś co zwr&oacute;ci Task z wykorzystaniem TaskCo
 &nbsp;&nbsp;&nbsp;&nbsp;});
 }</pre></div>
 
-<p>Użycie tego helpera skraca kod do:</p>
+<p>Po jego użyciu kod skraca się do:</p>
 
 <div class="code"><pre class="prettyprint lang-cs">public Task GetNextInt()
 {
 &nbsp;&nbsp;&nbsp;&nbsp;return Invoke(GetNextInt);
 }</pre></div>
 
-<p>a w przypadku gdy metoda przyjmuje argumenty:</p>
+<p>Kiedy natomiast metoda przyjmuje argumenty:</p>
 
 <div class="code"><pre class="prettyprint lang-cs">public Task GetNextInt(string argument)
 {
 &nbsp;&nbsp;&nbsp;&nbsp;return Invoke((handler) =&gt; GetNextInt(argument, handler));
 }</pre></div>
 
-<p>Ten helper sprawdzi się jeżeli API używa typu Action jako kolbaka, adaptacja API, kt&oacute;re używa innego typu też nie powinna być trudna (sprowadza się do zmiany typu przyjmowanego jako argument helpera). Problem pojawia się gdy API używa r&oacute;żnych typ&oacute;w dla kolbak&oacute;w. Niestety Csharp ma ograniczenie i nie potrafi &quot;w locie&quot; przetłumaczyć typ&oacute;w oznaczanych słowem delegate nawet jeżeli mają takie same wejścia i wyjścia (np. nie da się przekazać Action&lt;object, EventArgs&gt; jako EventHandlera). W tym przypadku można pisać wszystko z palca, napisać generator kodu, albo pr&oacute;bować ugryźć to refleksją.</p>
+<p>Użycie takiego helpera ma sens w sytuacji, kiedy API używa typu Action jako callbacka, ale również w memencie kiedy API używa innego typu (wtedy najlepiej jest użyć go do zmiany typu przyjmowanego jako argument helpera).</p>
+<p>Problem zaczyna się gdy API używa callbacków różnego typu, ale jak już wspomniełem nasz staruszek C# ma wiele ograniczeń i nie potrafi „w locie” przetłumaczyć typów oznaczanych słowem delegate, nawet jeżeli mają takie same wejścia i wyjścia. Przykładem może być Action<object, EventArg> - nie da się przekazać tej akcji jako EventHandler. W takiej sytuacji można pisać wszystko z palca, napisać generator kodu lub odpuścić i wyciągnąć jakieś wnioski na przyszłość.</p>
 
-<h3>Promise</h3>
+<h3>Promise (obiecanki-cacanki)</h3>
 
-<p>Mechanizm obiecanek(Promise) został spopularyzowany w javascript przez jQuery, dobrze przyjął się też w Javie, w .Net nie zdążył bo pojawiło się async/await ale można spotkać chałupnicze jego implementacje. Ponieważ kawałek kodu wyraża więcej niż 1000 sł&oacute;w to jeżeli w kodzie istnieje kawałek kodu wyglądający tak:</p>
+<p>Obiecanki to bardzo popularny mechanizm używany w wielu technologiac, w .Net raczej nie występuje, gdyż pojawiło się async/await, jednak można spotkać pewne chałupnicze implementacje. Po co jednak słowa – lepiej będzie, gdy spojrzycie na kod, gdyż wyraża on więcej niż tysiąc słów. Jeżeli w aplikacji występuje taki kod:</p>
 
 <div class="code"><pre class="prettyprint lang-cs">GetNextInt()
 &nbsp;&nbsp;&nbsp;&nbsp;.OnDone(result =&gt; {
@@ -98,7 +102,7 @@ Adaptacja takiej metody do czegoś co zwr&oacute;ci Task z wykorzystaniem TaskCo
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;HideSpinner();
 &nbsp;&nbsp;&nbsp;&nbsp;});</pre></div>
 
-<p>to na 99% GetNextInt zwraca Promise&lt;T&gt; albo IPromise&lt;T&gt;. Adaptacja Promise do Task jest nawet łatwiejsza niż kolbaka:</p>
+<p>to na 99% GetNextInt zwraca Promise<T>  ewentualnie Future<T>. Adaptacja Promise do klasy Task jest nawet łatwiejsza niż kolbaka, sami zobaczcie:</p>
 
 <div class="code"><pre class="prettyprint lang-cs">public Taks&lt;T&gt; Wrap(this IPromise&lt;T&gt; promise)
 {
@@ -112,7 +116,7 @@ Adaptacja takiej metody do czegoś co zwr&oacute;ci Task z wykorzystaniem TaskCo
 &nbsp;&nbsp;&nbsp;&nbsp;return taskCompletionSource.Task;
 }</pre></div>
 
-<p>a może być jeszcze łatwiejsza:</p>
+<p>ale może być jeszcze łatwiejsza:</p>
 
 <div class="code"><pre class="prettyprint lang-cs">public Taks&lt;T&gt; Wrap&lt;T&gt;(this IPromise&lt;T&gt; promise)
 {
@@ -124,8 +128,6 @@ Adaptacja takiej metody do czegoś co zwr&oacute;ci Task z wykorzystaniem TaskCo
 }</pre></div>
 
 
-<p>&nbsp;</p>
+<p>Na dziś – tyle. Jednak to jeszce nie koniec … cdn.</p>
 
-<h2>Kody źr&oacute;dłowe</h2>
-
-<p>Kod źr&oacute;dłowy projektu stworzonego na potrzeby tego postu udostępniam na <a href="https://github.com/szogun1987/events-and-tasks">githubie</a></p>
+<p>Kod źr&oacute;dłowy projektu stworzonego na potrzeby tego postu udostępniam na <a href="https://github.com/szogun1987/events-and-tasks">Githubie</a></p>
